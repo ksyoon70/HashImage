@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "HashImage": {
+      "commandName": "Project",
+      "nativeDebugging": true
+    }
+  }
+}

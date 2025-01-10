@@ -10,6 +10,7 @@ using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Windows.Media;
+using System.Threading.Tasks;
 
 namespace HashImage
 {
@@ -120,6 +121,107 @@ namespace HashImage
 
             DestroyIcon(shinfo.hIcon); // 리소스 해제
             return bitmapSource;
+        }
+        private void CurrentFolderTest_Click(object sender, RoutedEventArgs e)
+        {
+            var selectedItem = DirectoryTree.SelectedItem as TreeViewItem;
+            if (selectedItem != null)
+            {
+                // 선택된 TreeViewItem의 Tag 속성을 사용하여 폴더 경로를 얻음
+                var selectedPath = selectedItem.Tag as string;
+                if (!string.IsNullOrEmpty(selectedPath))
+                {
+                    ProcessImageFilesInFolder(selectedPath);
+                }
+            }
+        }
+
+        private async void ProcessImageFilesInFolder(string folderPath)
+        {
+            await Task.Run(() =>
+            {
+                try
+                {
+                    // 지원하는 이미지 확장자
+                    string[] supportedExtensions = { ".jpg", ".jpeg", ".png", ".bmp", ".gif", ".tiff" };
+
+                    // 현재 폴더의 이미지 파일 검색
+                    var imageFiles = Directory.GetFiles(folderPath)
+                                              .Where(file => supportedExtensions.Contains(System.IO.Path.GetExtension(file).ToLower()))
+                                              .ToList();
+                    int totalImageCount = imageFiles.Count;
+                    int currentCount = 0;
+                    int regCount = 0;
+                    int unregCount = 0;
+                    int MODCNT = totalImageCount / 20;
+                    if (MODCNT == 0)
+                        MODCNT = 1;
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        LogContent += $"총 파일 갯수:{imageFiles.Count}\r\n";
+                    });
+
+                    // UI 업데이트는 Dispatcher를 사용하여 실행
+                    foreach (var imageFile in imageFiles)
+                    {
+
+                        //key를 얻어온다.
+                        StringBuilder key = new StringBuilder(100);
+                        if (ImageHashMng.GetKey(imageFile, key, key.Capacity))
+                        {
+                            StringBuilder value = new StringBuilder(100);
+                            if (ImageHashMng.FindValue(key.ToString(), value, value.Capacity))
+                            {
+                                regCount++;
+                            }
+                            else
+                            {
+                                unregCount++;
+                            }
+                        }
+                        else
+                        {
+                            Application.Current.Dispatcher.Invoke(() =>
+                            {
+                                LogContent += $"Key생성오류 파일: {imageFile}\r\n";
+                            });
+                            unregCount++;
+                        }
+
+                        currentCount++;
+
+                        if(currentCount % MODCNT == 0)
+                        {
+                            Application.Current.Dispatcher.Invoke(() =>
+                            {
+                                LogContent += $"{currentCount * 100 / totalImageCount}% 진행\r\n";
+                            });
+                        }
+                    }
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        LogContent += $"100% 완료\r\n";
+                        LogContent += $"등록 : {regCount}, {regCount*100/ totalImageCount} %\r\n";
+                        LogContent += $"미등록 : {unregCount}, {unregCount * 100 / totalImageCount} %\r\n";
+                    });
+
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        LogContent += $"권한이 없어 접근할 수 없는 폴더: {folderPath}\r\n";
+                    });
+                }
+                catch (Exception ex)
+                {
+                    Application.Current.Dispatcher.Invoke(() =>
+                    {
+                        LogContent += $"오류 발생 - {ex.Message}: {folderPath}\r\n";
+                    });
+                }
+            });
+
         }
     }
 }
